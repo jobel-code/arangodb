@@ -40,8 +40,8 @@ RocksDBValue RocksDBValue::Collection(VPackSlice const& data) {
   return RocksDBValue(RocksDBEntryType::Collection, data);
 }
 
-RocksDBValue RocksDBValue::PrimaryIndexValue(LocalDocumentId const& docId) {
-  return RocksDBValue(RocksDBEntryType::PrimaryIndexValue, docId);
+RocksDBValue RocksDBValue::PrimaryIndexValue(LocalDocumentId const& docId, TRI_voc_rid_t rev) {
+  return RocksDBValue(RocksDBEntryType::PrimaryIndexValue, docId, rev);
 }
 
 RocksDBValue RocksDBValue::EdgeIndexValue(arangodb::StringRef const& vertexId) {
@@ -53,7 +53,7 @@ RocksDBValue RocksDBValue::VPackIndexValue() {
 }
 
 RocksDBValue RocksDBValue::UniqueVPackIndexValue(LocalDocumentId const& docId) {
-  return RocksDBValue(RocksDBEntryType::UniqueVPackIndexValue, docId);
+  return RocksDBValue(RocksDBEntryType::UniqueVPackIndexValue, docId, 0);
 }
 
 RocksDBValue RocksDBValue::View(VPackSlice const& data) {
@@ -114,13 +114,19 @@ uint64_t RocksDBValue::keyValue(std::string const& s) {
 
 RocksDBValue::RocksDBValue(RocksDBEntryType type) : _type(type), _buffer() {}
 
-RocksDBValue::RocksDBValue(RocksDBEntryType type, LocalDocumentId const& docId)
+RocksDBValue::RocksDBValue(RocksDBEntryType type, LocalDocumentId const& docId, TRI_voc_rid_t revision)
     : _type(type), _buffer() {
   switch (_type) {
     case RocksDBEntryType::UniqueVPackIndexValue:
     case RocksDBEntryType::PrimaryIndexValue: {
-      _buffer.reserve(sizeof(uint64_t));
-      uint64ToPersistent(_buffer, docId.id()); // LocalDocumentId
+      if(!revision){
+        _buffer.reserve(sizeof(uint64_t));
+        uint64ToPersistent(_buffer, docId.id());  // LocalDocumentId
+      } else {
+        _buffer.reserve(sizeof(uint64_t) * 2);
+        uint64ToPersistent(_buffer, docId.id());  // LocalDocumentId
+        uint64ToPersistent(_buffer, revision); // revision
+      }
       break;
     }
 
@@ -142,7 +148,7 @@ RocksDBValue::RocksDBValue(RocksDBEntryType type, VPackSlice const& data)
                      static_cast<size_t>(data.byteSize()));
       break;
     }
-      
+
     case RocksDBEntryType::Document:
       TRI_ASSERT(false);// use for document => get free schellen
       break;
