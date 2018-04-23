@@ -420,12 +420,10 @@ arangodb::Result RocksDBReplicationContext::dumpKeys(
   }
 
   TRI_ASSERT(_collection->iter);
-  RocksDBSortedAllIterator* primary =
-      static_cast<RocksDBSortedAllIterator*>(_collection->iter.get());
+  RocksDBGenericAllIndexIterator* primary = static_cast<RocksDBGenericAllIndexIterator*>(_collection->iter.get());
 
   // Position the iterator correctly
-  if (chunk != 0 &&
-      ((std::numeric_limits<std::size_t>::max() / chunk) < chunkSize)) {
+  if (chunk != 0 && ((std::numeric_limits<std::size_t>::max() / chunk) < chunkSize)) {
     return rv.reset(TRI_ERROR_BAD_PARAMETER,
                     "It seems that your chunk / chunkSize combination is not "
                     "valid - overflow");
@@ -460,23 +458,19 @@ arangodb::Result RocksDBReplicationContext::dumpKeys(
     }
   }
 
-  auto cb = [&](LocalDocumentId const& documentId, VPackSlice slice) {
-    TRI_voc_rid_t revisionId = 0;
-    VPackSlice key;
-    transaction::helpers::extractKeyAndRevFromDocument(slice, key, revisionId);
-
-    TRI_ASSERT(key.isString());
-
+  auto cb = [&](rocksdb::Slice const& rocksKey, rocksdb::Slice const& rocksValue) {
+    TRI_ASSERT(rocksValue.size() > sizeof(TRI_voc_rid_t));
+    TRI_voc_rid_t docRev = uint64FromPersistent(rocksValue.data() + sizeof(std::uint64_t));
     b.openArray();
-    b.add(key);
-    b.add(VPackValue(TRI_RidToString(revisionId)));
+    b.add(velocypack::ValuePair(rocksKey.data()+sizeof(std::uint64_t), rocksKey.size()-sizeof(std::uint64_t)));
+    b.add(VPackValue(TRI_RidToString(docRev)));
     b.close();
   };
 
   b.openArray();
   // chunkSize is going to be ignored here
   try {
-    _collection->hasMore = primary->nextDocument(cb, chunkSize);
+    _collection->hasMore = primary->gnext(cb, chunkSize);
     _lastIteratorOffset++;
   } catch (std::exception const&) {
     return rv.reset(TRI_ERROR_INTERNAL);

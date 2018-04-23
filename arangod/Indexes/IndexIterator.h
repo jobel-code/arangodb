@@ -102,7 +102,7 @@ class IndexIterator {
 /// @brief Special iterator if the condition cannot have any result
 class EmptyIndexIterator final : public IndexIterator {
  public:
-  EmptyIndexIterator(LogicalCollection* collection, transaction::Methods* trx, arangodb::Index const* index) 
+  EmptyIndexIterator(LogicalCollection* collection, transaction::Methods* trx, arangodb::Index const* index)
       : IndexIterator(collection, trx, index) {}
 
   ~EmptyIndexIterator() {}
@@ -143,7 +143,7 @@ class MultiIndexIterator final : public IndexIterator {
         delete it;
       }
     }
-    
+
     char const* typeName() const override { return "multi-index-iterator"; }
 
     /// @brief Get the next elements
